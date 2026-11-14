@@ -279,8 +279,12 @@ type Loaded = { status: 'loading' } | { status: 'error' } | { status: 'ready'; v
 
 /** byok's own settings panel: which service, which model, and the keys. */
 export function ByokPanel({ store, catalog, Button = DefaultButton, undoMs = UNDO_MS }: ByokPanelProps) {
-  const fallback = React.useRef<ByokStore | null>(null);
-  const own = store ?? (fallback.current ??= createByokStore(catalog ? { catalog } : {}));
+  // Keyed on the catalog's contents, so an inline catalog literal does not make a new store (and a
+  // reload) on every render, while a changed catalog does. A passed `store` must stay the same object.
+  const catalogKey = catalog ? JSON.stringify(catalog) : '';
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fallback = React.useMemo(() => (store ? null : createByokStore(catalog ? { catalog } : {})), [store, catalogKey]);
+  const own = store ?? fallback!;
   const [loaded, setLoaded] = React.useState<Loaded>({ status: 'loading' });
   const [note, setNote] = React.useState('');
   const [problem, setProblem] = React.useState('');

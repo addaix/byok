@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { adoptKeys, ANTHROPIC, byokDefaults, byokSchema, CATALOG, createByokStore, fromSection, keyField, modelChoice, OPENAI, serviceInfo } from '../src';
+import { adoptKeys, sectionKeys, ANTHROPIC, byokDefaults, byokSchema, CATALOG, createByokStore, fromSection, keyField, modelChoice, OPENAI, serviceInfo } from '../src';
 import { memoryStore } from './helpers';
 
 const KEY = 'sk-ant-api03-SECRETSECRETSECRET-1234';
@@ -163,5 +163,16 @@ describe('namespace, custom models and moving keys', () => {
     expect(adopted).toEqual(['anthropic']);
     expect(await store.revealKey('anthropic')).toBe(KEY);
     expect(await store.revealKey('openai')).toBe('sk-NEW-SECRET');
+  });
+
+  it('moves keys from the own store into a host section without building ids by hand', async () => {
+    const own = memoryStore();
+    await own.store.setKey('anthropic', KEY);
+    const host = memoryStore().secrets;
+    const into = sectionKeys({ secrets: host, prefix: 'ai.' });
+    expect(await adoptKeys({ from: (s) => own.store.revealKey(s), into, services: ['anthropic', 'openai'] })).toEqual(['anthropic']);
+    expect(await host.reveal('ai.keys.anthropic')).toBe(KEY);
+    const settings = fromSection({ effective: () => ({}), secrets: host, prefix: 'ai' });
+    expect(await settings.revealKey('anthropic')).toBe(KEY);
   });
 });

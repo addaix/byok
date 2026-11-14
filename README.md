@@ -76,7 +76,7 @@ byok reads its settings through one seam, `ByokSettings` (`catalog`, `values()`,
 | **Own** (default) | `createByokStore()`: plain values and keys in this browser, behind [zodal](https://github.com/i2mint/zodal) `DataProvider`s, under the `byok` namespace. Apps on one site that keep the default share the keys, so a person sets a key once; pass `namespace` to keep an app's own. |
 | **Host section** | Mount byok's schema in your [zodal-dials](https://github.com/i2mint/zodal-dials) settings, `mountSection('ai', byokSchema())`, and hand byok your effective values: `fromSection({ effective: () => store.getState().effective, secrets, prefix: 'ai' })`. Keys stay in your secret backend under `ai.keys.<service>`. |
 
-`adoptKeys` moves keys from an older place (an app's previous storage, or byok's own store when moving to a host section) without overwriting a key already set.
+`adoptKeys` moves keys from an older place (an app's previous storage, or byok's own store when moving to a host section, with `sectionKeys({ secrets, prefix })` as the target) without overwriting a key already set.
 
 Keys never enter the plain settings record, a form value, a log, the address or an error message, and reads give a masked `SecretRef`. What byok does not protect against: anyone with the unlocked device and browser profile, any script on the page, and any other page of the same site can read a key stored in this browser. Encrypting it in the same storage would not change that. Pass a different `secrets` backend (a server vault), with `where` saying where it keeps them, when keys must not live on the device.
 

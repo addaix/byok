@@ -16,6 +16,7 @@ export {
   deviceSecretBackend,
   fromSection,
   IN_THIS_BROWSER,
+  sectionKeys,
   type ByokSettings,
   type ByokStore,
   type ByokView,

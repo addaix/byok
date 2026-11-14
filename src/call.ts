@@ -150,7 +150,7 @@ export function modelCall(choice: KeyedChoice, options: ModelCallOptions = {}): 
       // however much text came with them.
       if (finishReason === 'length') throw fail('cut_off');
       if (finishReason === 'content-filter') throw fail('declined');
-      if (finishReason !== 'stop') throw fail('failed');
+      if (finishReason !== 'stop' || !text.trim()) throw fail('failed'); // an empty reply is no answer either
       return text;
     } catch (error) {
       if (isAbort(error)) throw error;

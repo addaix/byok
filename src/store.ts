@@ -233,6 +233,31 @@ export function fromSection({
 }
 
 /**
+ * The keys of a host section, read and written under `<prefix>.keys.<service>` in the host's
+ * secret backend: the `into` (or `from`) of `adoptKeys` when keys move between byok's own store
+ * and a host section, so no caller builds those ids by hand.
+ */
+export function sectionKeys({ secrets, prefix }: { secrets: Pick<SecretBackend, 'reveal' | 'set' | 'delete'>; prefix: string }): Pick<ByokStore, 'revealKey' | 'setKey'> {
+  const p = normalPrefix(prefix);
+  if (!p) throw new Error('byok sectionKeys: the prefix must be a non-empty string');
+  const id = (service: ServiceId) => `${p}.${keyField(service)}`;
+  return {
+    async revealKey(service) {
+      const key = await secrets.reveal(id(service));
+      return typeof key === 'string' ? key : '';
+    },
+    async setKey(service, key) {
+      const trimmed = key.trim();
+      if (!trimmed) {
+        await secrets.delete(id(service));
+        return makeSecretRef(id(service), false);
+      }
+      return secrets.set(id(service), trimmed);
+    },
+  };
+}
+
+/**
  * Copy keys into a store that does not have them yet, from another place (an app's older storage,
  * or byok's own store when moving to a host section). Returns the services whose key was adopted.
  * A key already in `into` is never overwritten. Removing the old copies is the caller's step,

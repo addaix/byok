@@ -67,7 +67,7 @@
   ],
   "sideEffects": false,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "tsup",
@@ -80,14 +80,14 @@
     "@ai-sdk/anthropic": "^4.0.105",
     "@ai-sdk/google": "^4.0.121",
     "@ai-sdk/openai": "^4.0.118",
+    "@zodal/core": "^0.2.0",
     "@zodal/store": "^0.2.0",
-    "@zodal/store-localstorage": "^0.2.0",
-    "@zodal/core": "^0.2.0"
+    "@zodal/store-localstorage": "^0.2.0"
   },
   "peerDependencies": {
     "ai": "^7.0.0",
     "react": ">=18",
-    "zod": "^4.0.0"
+    "zod": "^4.1.8"
   },
   "peerDependenciesMeta": {
     "ai": {
@@ -101,25 +101,24 @@
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "ai": "^7.0.173",
     "jsdom": "^25.0.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tsup": "^8.5.1",
     "typescript": "~5.9",
-    "vitest": "^3.2.7",
-    "zod": "^4.6.7",
-    "ai": "^7.0.173"
+    "vitest": "^4.1.12",
+    "zod": "^4.6.7"
   },
   "allowScripts": {
-    "esbuild@0.27.7": true,
-    "fsevents": false
+    "fsevents": false,
+    "esbuild@0.27.2": true
   },
   "wads": {
     "ci": {
       "subdir": ".",
       "packageManager": "npm",
       "nodeVersions": [
-        "20",
         "22",
         "24"
       ],
