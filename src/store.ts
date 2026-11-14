@@ -75,7 +75,7 @@ export const DEFAULT_NAMESPACE = 'byok';
 const VALUES_ID = 'byok';
 
 /** What the own store says about where keys are kept, when it keeps them in this browser. */
-export const IN_THIS_BROWSER = 'Kept in this browser, on this device. Anyone using this browser profile can read it.';
+export const IN_THIS_BROWSER = 'Kept in this browser, on this device. Anyone using this browser profile, and any other page of this site, can read it.';
 
 async function getOrUndefined<T>(provider: DataProvider<T>, id: string): Promise<T | undefined> {
   try {
