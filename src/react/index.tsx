@@ -92,10 +92,15 @@ export interface KeyFieldProps {
    * says only where the key is sent.
    */
   where?: string;
+  /**
+   * What goes with the key and when, as the sentence's end: "Sent only to Anthropic, <sentWhen>."
+   * Default "when you use it"; say more when more is sent ("with the transcripts, when you search").
+   */
+  sentWhen?: string;
   Button?: React.ComponentType<ByokButtonProps>;
 }
 
-export function KeyField({ service, keyRef, onSave, onForget, label, id = 'byok-key', where, Button = DefaultButton }: KeyFieldProps) {
+export function KeyField({ service, keyRef, onSave, onForget, label, id = 'byok-key', where, sentWhen = 'when you use it', Button = DefaultButton }: KeyFieldProps) {
   const input = React.useRef<HTMLInputElement>(null);
   const masked = React.useRef<HTMLSpanElement>(null);
   const busy = React.useRef(false); // one guard for Save and Enter
@@ -139,7 +144,7 @@ export function KeyField({ service, keyRef, onSave, onForget, label, id = 'byok-
       busy.current = false;
     }
   };
-  const sentTo = `Sent only to ${service.name}, when you use it.`;
+  const sentTo = `Sent only to ${service.name}, ${sentWhen}.`;
   const whereLine = <p className="byok-help">{where ? `${where} ${sentTo}` : sentTo}</p>;
   const alert = problem ? (
     <p role="alert" className="byok-error">

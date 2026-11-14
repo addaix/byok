@@ -168,4 +168,13 @@ describe('ByokPanel and its key field', () => {
     expect(container.textContent).not.toContain('Kept in this browser');
     expect(container.textContent).toContain('Sent only to Anthropic, when you use it.');
   });
+
+  it('says what is sent with the key when the host says more', async () => {
+    const { KeyField } = await import('../src/react');
+    const { ANTHROPIC } = await import('../src');
+    await act(async () =>
+      root.render(<KeyField service={ANTHROPIC} keyRef={null} onSave={async () => true} onForget={() => undefined} where="Kept only in this browser." sentWhen="with the transcripts, when you search" />),
+    );
+    expect(container.textContent).toContain('Kept only in this browser. Sent only to Anthropic, with the transcripts, when you search.');
+  });
 });
