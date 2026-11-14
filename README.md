@@ -1,31 +1,35 @@
 # byok
 
-Bring your own AI keys, in a browser app: the person picks an AI service and a model, pastes their own API key, and the app calls the service straight from their browser with it.
+Bring your own AI keys, for browser apps: the person picks an AI service and a model, pastes their own API key, and your web app calls the service straight from their browser with it, with no backend of yours in between.
 
-byok gives you four things that every app doing this writes for itself:
+For developers of web apps that make AI calls client-side. Server-side key platforms (`@byok-sdk/*`) and browser-extension kits (`@amenophis1er/byok`) solve neighbouring problems; byok is a settings section you mount in a web app's own settings, over [Vercel's AI SDK](https://ai-sdk.dev) (`ai`).
 
-- **A settings schema** (Zod): per capability, which service and which model, plus one secret key per service. Mount it in your app's settings, or use byok's own.
-- **The call**: settings in, a `(prompt) => Promise<string>` out, with errors a person can act on ("Anthropic refused the key. Check it in Settings, or paste a new one.") that never contain the key.
-- **A cost estimate** before a run, from a stated price, and "cost not estimated" rather than $0 when there is none.
-- **A key field** (React) that never puts the key in the DOM, in React state, or in front of a password manager.
+It gives you four things such apps usually write themselves:
+
+- **A settings schema** ([Zod](https://zod.dev)): per capability, which service and which model, plus one secret key per service. Mount it in your app's settings, or use byok's own store and panel.
+- **The call**: settings in, `(prompt) => Promise<string>` out, with errors a person can act on ("Anthropic refused the key. Check it in Settings, or paste a new one.") whose text never includes the key.
+- **A cost estimate** before a run, from a stated price; "cost not estimated" rather than $0 when there is none.
+- **A key field** (React) that keeps the key out of DOM attributes, the page's HTML and React state, and asks password managers not to save it ([the tests](test/react.test.tsx)).
 
 ```bash
-npm install byok zod
+npm install byok zod ai
 ```
 
 ## Quick start
 
 ```ts
 import { createByokStore } from 'byok';
+import { makeModelCall } from 'byok/call';
 
 const settings = createByokStore();            // kept in this browser
 await settings.setKey('anthropic', pastedKey); // from your key field
 await settings.save({ 'text.model': 'claude-sonnet-5-5' });
 
-const { makeModelCall } = await import('byok/call'); // the AI SDK loads only now
 const ask = await makeModelCall(settings);
 const answer = await ask('Summarise this in one line: ...');
 ```
+
+`byok/call` is the only entry that loads the AI SDK; import it lazily (`await import('byok/call')`) to keep the SDK out of your first download.
 
 A settings panel, if your app has none:
 
@@ -35,17 +39,19 @@ import { ByokPanel } from 'byok/react';
 <ByokPanel />  // service, model and its price, the key, other keys, Undo after Forget
 ```
 
+Each service's default model is the first in its list, the most capable, which is also the most expensive (Claude Opus for Anthropic). Save a `text.model`, or pass a catalog that lists a cheaper model first.
+
 ## Errors a person can act on
 
-Every failure is a `ModelCallError` with a `code` and one fixed sentence: `no_key`, `bad_key`, `no_credit`, `rate_limit`, `model`, `busy`, `network`, `cut_off`, `declined`, `failed`. The service's own error text is never passed on, because some services quote part of the key in it. A missing key fails at once, before any request. A cancelled call (`signal`) stays an `AbortError`. `FATAL_CODES` are the ones after which retrying with the same settings cannot help.
+Every failure is a `ModelCallError` with a `code` and one fixed sentence: `no_key`, `bad_key`, `no_credit`, `rate_limit`, `model`, `busy`, `network`, `cut_off`, `declined`, `failed`. The service's own error text is never passed on, because some services quote part of the key in it. A missing key fails at once, before any request. A cancelled call (`signal`) is an `AbortError`. `FATAL_CODES` are the ones after which retrying with the same settings cannot help. `isModelCallError(e)` checks by name and code, for code that may see two copies of byok.
 
 ```ts
-import { ModelCallError, FATAL_CODES } from 'byok';
+import { isModelCallError } from 'byok';
 
 try {
   await ask(prompt, { signal });
 } catch (e) {
-  if (e instanceof ModelCallError) showToPerson(e.message);
+  if (isModelCallError(e)) showToPerson(e.message);
 }
 ```
 
@@ -63,19 +69,20 @@ const figure = estimate({ inputWords: 90_000, outputTokens: 4_000 }, model);
 
 ## Where the settings live
 
-byok reads its settings through one seam, `ByokSettings` (`values()` and `revealKey(service)`). Three wirings, none of which changes byok:
+byok reads its settings through one seam, `ByokSettings` (`catalog`, `values()`, `revealKey(service)`). Two wirings, neither of which changes byok:
 
 | Wiring | What the app does |
 |---|---|
-| **Own** (default) | `createByokStore()`: plain values and keys in this browser, behind zodal `DataProvider`s. |
-| **Host section** | Mount byok's schema in your zodal-dials settings, `mountSection('ai', byokSchema())`, and hand byok its section: `fromSection({ read: () => sectionOf(store, 'ai', byokSchema()), secrets, prefix: 'ai' })`. Keys stay in your secret backend under `ai.keys.<service>`. |
-| **Both** | Layer byok's own store under your section in your dials cascade; byok reads the resolved section the same way. |
+| **Own** (default) | `createByokStore()`: plain values and keys in this browser, behind [zodal](https://github.com/i2mint/zodal) `DataProvider`s, under the `byok` namespace. Apps on one site that keep the default share the keys, so a person sets a key once; pass `namespace` to keep an app's own. |
+| **Host section** | Mount byok's schema in your [zodal-dials](https://github.com/i2mint/zodal-dials) settings, `mountSection('ai', byokSchema())`, and hand byok your effective values: `fromSection({ effective: () => store.getState().effective, secrets, prefix: 'ai' })`. Keys stay in your secret backend under `ai.keys.<service>`. |
 
-Keys never enter the plain settings record, a form value, a log, the address or an error message, and reads give a masked `SecretRef`. What byok does not protect against, said plainly: anyone with the unlocked device and browser profile, or any script on the page, can read a key stored in this browser. Encrypting it in the same storage would not change that. Pass a different `secrets` backend (a server vault) when keys must not live on the device.
+`adoptKeys` moves keys from an older place (an app's previous storage, or byok's own store when moving to a host section) without overwriting a key already set.
+
+Keys never enter the plain settings record, a form value, a log, the address or an error message, and reads give a masked `SecretRef`. What byok does not protect against: anyone with the unlocked device and browser profile, any script on the page, and any other page of the same site can read a key stored in this browser. Encrypting it in the same storage would not change that. Pass a different `secrets` backend (a server vault), with `where` saying where it keeps them, when keys must not live on the device.
 
 ## Services and models
 
-Anthropic, OpenAI and Google out of the box (`CATALOG`), each with a short curated model list, most capable first. Pass your own `catalog` to offer fewer services or other models. Anthropic calls carry the header `anthropic-dangerous-direct-browser-access: true`, which Anthropic requires for a call from a web page with the user's own key. OpenAI calls ask the service not to store the request.
+Anthropic, OpenAI and Google out of the box (`CATALOG`), each with a short curated model list, most capable first. Pass your own `catalog` to offer fewer services or other models; set `customModels: true` on a service to send ids that are not in its list. Anthropic calls carry the header `anthropic-dangerous-direct-browser-access: true`, which Anthropic requires for a call from a web page with the person's own key. OpenAI calls ask OpenAI not to keep the request for later retrieval (`store: false`); OpenAI's own retention policy still applies.
 
 For streaming or tool calling, take the AI SDK model and call the SDK yourself:
 
@@ -87,11 +94,11 @@ const { languageModel, providerOptions, service, model } = await resolveModel(se
 
 ## Entries
 
-| Import | Holds | Loads |
+| Import | Holds | Needs |
 |---|---|---|
-| `byok` | schema, catalog, store, estimate, error types | zod, `@zodal/store-localstorage` |
-| `byok/call` | `makeModelCall`, `modelCall`, `resolveModel`, `toModelCallError` | the AI SDK (each service's client on first use) |
-| `byok/react` | `KeyField`, `OtherKeys`, `ByokPanel` | React |
+| `byok` | schema, catalog, store, estimate, error types | `zod` |
+| `byok/call` | `makeModelCall`, `modelCall`, `resolveModel`, `toModelCallError` | `ai` 7 (each service's client loads on first use) |
+| `byok/react` | `KeyField`, `OtherKeys`, `ByokPanel` | `react` |
 
 The design record (seams, defaults, what is deliberately not a seam) is [docs/seams.md](docs/seams.md).
 

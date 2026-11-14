@@ -6,12 +6,14 @@ The boundaries byok v1 commits to. Later work adds at one of these; it does not 
 
 | # | Seam | Who it is for | v1 default (no new dependency) | Replacement it was declared for |
 |---|---|---|---|---|
-| 1 | `settings` (`ByokSettings`): where byok reads the service, the model and the key | the end user, through the host | `createByokStore()`: byok's own store in this browser | a host section mounted with zodal-dials `mountSection` / read with `sectionOf` (`fromSection`), or both as a dials cascade |
+| 1 | `settings` (`ByokSettings`): where byok reads the services offered, the choice of service and model, and the key | the end user, through the host | `createByokStore()`: byok's own store in this browser, namespace `byok` | a host section mounted with zodal-dials `mountSection`, read with `fromSection` over the host's effective values |
 | 2 | `secrets` (`SecretBackend`): where keys are kept | the end user, indirectly | `deviceSecretBackend()`: this browser's storage through `@zodal/store-localstorage` | zodal-dials `providerSecretBackend` (same contract, not yet on npm: i2mint/zodal#23); a server vault over `@zodal/store-http` when keys must follow a person between devices |
-| 3 | `catalog`: the services offered and their models and prices | the developer | `CATALOG`: Anthropic, OpenAI, Google with short curated lists | each app's own list (apps in the fleet already differ on defaults and on which services they offer) |
+| 3 | `catalog`: the services offered, their models and prices, whether custom model ids are sent | the developer | `CATALOG`: Anthropic, OpenAI, Google with short curated lists | each app's own list (apps already differ on defaults, on which services they offer, and on typed model ids). It travels with the settings, so the page and the call read the same list. |
 | 4 | `Button` slot in the React parts | the developer | `DefaultButton`: pressed on pointerdown, pending with `aria-busy` / `aria-disabled`, ignores repeat presses | the app's own button with its press feedback; `@zodal/ui`'s `usePress` once published |
 
-`config` (the `DataProvider` under the own store's plain values) and `fetch` (the transport, for tests) are parameters too, but they are the storage seam and a test seam, not product boundaries.
+`config` (the `DataProvider` under the own store's plain values), `namespace` (which storage keys the own store uses) and `fetch` (the transport, for tests) are parameters too, but they are the storage seam and a test seam, not product boundaries.
+
+**Not built: the "both" wiring** (byok's own store layered under a host section, so a key set once is overridable per app). The host's dials cascade can do it once a consumer needs it; `adoptKeys` already moves keys between the two places.
 
 ## Not seams, on purpose
 
@@ -28,7 +30,7 @@ The boundaries byok v1 commits to. Later work adds at one of these; it does not 
 
 | Surface | v1 | Would it change the core? |
 |---|---|---|
-| TS library (three entries: `byok`, `byok/call`, `byok/react`) | built | n/a |
+| TS library (three entries: `byok`, `byok/call`, `byok/react`; `ai` 7 is an optional peer, needed by `byok/call` only) | built | n/a |
 | React panel / key field | built (`byok/react`) | no: props in, callbacks out; the store is a parameter |
 | Agent skill | not yet | no: every operation has a name a stranger can be told (set a key, pick a model, estimate, call) |
 | CLI / MCP / HTTP | not applicable | byok is a browser component; a server-side twin would hold keys in a vault behind the same `SecretBackend` |

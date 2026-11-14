@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { makeModelCall, modelCall, resolveModel, type KeyedChoice } from '../src/call';
-import { FATAL_CODES, ModelCallError } from '../src';
+import { FATAL_CODES, isModelCallError, ModelCallError, OPENAI } from '../src';
 import { anthropicReply, fakeTransport, memoryStore, type Sent } from './helpers';
 
 const KEY = 'sk-ant-api03-SECRETSECRETSECRET-1234';
@@ -133,7 +133,52 @@ describe('modelCall', () => {
   });
 });
 
+describe('the paths a review found', () => {
+  it('a cancel that arrives with a failure is a clean AbortError, never the raw SDK error', async () => {
+    const controller = new AbortController();
+    const fetch = (async () => {
+      controller.abort(); // the person cancels while the 401 is arriving
+      return new Response(JSON.stringify({ error: { message: `Incorrect API key provided: ${OPENAI_KEY}` } }), { status: 401, headers: { 'content-type': 'application/json' } });
+    }) as typeof globalThis.fetch;
+    const error = await modelCall({ service: 'openai', model: '', apiKey: OPENAI_KEY }, { fetch, maxRetries: 0 })('hi', { signal: controller.signal }).catch((e) => e);
+    expect(error.name).toBe('AbortError');
+    for (const text of [String(error), JSON.stringify(error), String(error.stack ?? ''), JSON.stringify(Object.getOwnPropertyNames(error).map((k) => (error as Record<string, unknown>)[k]))]) {
+      expect(text).not.toContain('SECRET');
+    }
+  });
+
+  it('a reply that did not finish (Anthropic compaction, Google OTHER) is a failure, not an empty answer', async () => {
+    const error = await failure(anthropicChoice, () => ({ status: 200, body: anthropicReply('', 'compaction') }));
+    expect(error.code).toBe('failed');
+  });
+
+  it("Google's 400 API_KEY_INVALID is a refused key, so a run stops", async () => {
+    const error = await failure({ service: 'google', model: '', apiKey: GOOGLE_KEY }, () => ({
+      status: 400, body: { error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } },
+    }));
+    expect(error.code).toBe('bad_key');
+    expect(FATAL_CODES.has(error.code)).toBe(true);
+  });
+
+  it('isModelCallError recognises the error by name and code', () => {
+    const copy = Object.assign(new Error('x'), { name: 'ModelCallError', code: 'bad_key' });
+    expect(isModelCallError(copy)).toBe(true);
+    expect(isModelCallError(new Error('x'))).toBe(false);
+  });
+});
+
 describe('from the settings', () => {
+  it("uses the settings' own catalog", async () => {
+    const { createByokStore } = await import('../src');
+    const { config, secrets } = memoryStore();
+    const store = createByokStore({ catalog: { openai: { ...OPENAI, customModels: true } }, config, secrets });
+    await store.save({ 'text.model': 'gpt-5.6-terra' });
+    await store.setKey('openai', OPENAI_KEY);
+    const { fetch, sent } = fakeTransport(() => ({ status: 500, body: {} }));
+    await (await makeModelCall(store, { fetch, maxRetries: 0 }))('hi').catch(() => undefined);
+    expect(sent[0]!.body.model).toBe('gpt-5.6-terra');
+  });
+
   it('v1 smoke: a fresh own store, a key set, a model call that returns text', async () => {
     const { store } = memoryStore();
     await store.save({ 'text.service': 'anthropic', 'text.model': 'claude-haiku-5-5' });

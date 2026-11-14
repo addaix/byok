@@ -64,7 +64,7 @@ describe('ByokPanel and its key field', () => {
     await store.setKey('openai', 'sk-proj-SECRET-2');
     await act(async () => root.render(<ByokPanel store={store} />));
     await settle();
-    expect(container.textContent).toContain('Other keys on this device');
+    expect(container.textContent).toContain('Other keys kept here');
     expect(container.textContent).toContain('OpenAI key');
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Forget this Anthropic key"]')!.click());
@@ -73,10 +73,10 @@ describe('ByokPanel and its key field', () => {
     expect(container.textContent).toContain('Forgot the Anthropic key.');
     expect(container.innerHTML).not.toContain('SECRET');
 
-    await act(async () => button(container, 'Undo')!.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Undo forgetting the Anthropic key"]')!.click());
     await settle();
     expect(await store.revealKey('anthropic')).toBe(KEY);
-    expect(container.textContent).toContain('Key restored.');
+    expect(container.textContent).toContain('Restored the Anthropic key.');
   });
 
   it('switching the service resets the model to that service\'s default, and shows its price line', async () => {
@@ -94,5 +94,78 @@ describe('ByokPanel and its key field', () => {
     expect(await store.values()).toEqual({ 'text.service': 'openai', 'text.model': '' });
     expect(container.textContent).toContain('cost not estimated');
     expect(container.textContent).toContain('Get an OpenAI key');
+  });
+
+  it('never saves a key typed for one service as another service\'s key', async () => {
+    const { store } = memoryStore();
+    await act(async () => root.render(<ByokPanel store={store} />));
+    await settle();
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>('#byok-key')!;
+      input.value = KEY;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const select = container.querySelector<HTMLSelectElement>('#byok-service')!;
+    await act(async () => {
+      select.value = 'openai';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await settle();
+    expect(container.querySelector<HTMLInputElement>('#byok-key')!.value).toBe('');
+    await act(async () => button(container, 'Save key')!.click());
+    await settle();
+    expect(await store.revealKey('openai')).toBe('');
+    expect(container.textContent).toContain('Paste your key first.');
+  });
+
+  it('says so and keeps the typed key when saving fails; repeated Enter saves once', async () => {
+    const { store } = memoryStore();
+    let calls = 0;
+    const failing = { ...store, setKey: async () => { calls += 1; throw new Error('quota'); } };
+    await act(async () => root.render(<ByokPanel store={failing} />));
+    await settle();
+    const input = container.querySelector<HTMLInputElement>('#byok-key')!;
+    await act(async () => {
+      input.value = KEY;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      for (let i = 0; i < 3; i++) input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    await settle();
+    expect(calls).toBe(1);
+    expect(container.querySelector('[role="alert"]')!.textContent).toContain('Could not save the key');
+    expect(input.value).toBe(KEY); // still there, to try again
+    expect(container.innerHTML).not.toContain('SECRET');
+  });
+
+  it('withdraws Undo once a newer key is saved, so an older key never overwrites it', async () => {
+    const { store } = memoryStore();
+    await store.setKey('anthropic', 'sk-ant-OLD-SECRET');
+    await act(async () => root.render(<ByokPanel store={store} />));
+    await settle();
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Forget this Anthropic key"]')!.click());
+    await settle();
+    expect(button(container, 'Undo')).toBeDefined();
+    await act(async () => {
+      const input = container.querySelector<HTMLInputElement>('#byok-key')!;
+      input.value = KEY;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button(container, 'Save key')!.click());
+    await settle();
+    expect(button(container, 'Undo')).toBeUndefined();
+    expect(await store.revealKey('anthropic')).toBe(KEY);
+  });
+
+  it('tells the person where the key is kept only when the store knows', async () => {
+    const { store, secrets } = memoryStore();
+    await act(async () => root.render(<ByokPanel store={store} />));
+    await settle();
+    expect(container.textContent).toContain('Kept in this browser, on this device.');
+    const { createByokStore } = await import('../src');
+    const vault = createByokStore({ secrets }); // a backend passed without `where`
+    await act(async () => root.render(<ByokPanel store={vault} />));
+    await settle();
+    expect(container.textContent).not.toContain('Kept in this browser');
+    expect(container.textContent).toContain('Sent only to Anthropic, when you use it.');
   });
 });

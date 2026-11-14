@@ -7,5 +7,7 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
+  // One copy of shared code (ModelCallError) for CommonJS too, so `instanceof` holds across entries.
+  splitting: true,
   external: ['react', 'zod', 'ai', /^@ai-sdk\//, /^@zodal\//],
 });

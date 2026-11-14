@@ -52,8 +52,9 @@ export function roundWords(words: number): string {
 /** Dollars to two significant figures: "$0.48", "$2.3", "$13", "$0.012". */
 export function formatDollars(dollars: number): string {
   if (!(dollars > 0)) return '$0';
-  const digits = Math.max(0, 1 - Math.floor(Math.log10(dollars)));
-  return `$${dollars.toFixed(digits)}`;
+  const rounded = Number(dollars.toPrecision(2)); // round first: 9.96 is "$10", not "$10.0"
+  const digits = Math.max(0, 1 - Math.floor(Math.log10(rounded)));
+  return `$${rounded.toFixed(digits)}`;
 }
 
 /** A cost as a page says it: "about $0.48", or "cost not estimated" without a price. */

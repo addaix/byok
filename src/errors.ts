@@ -39,6 +39,8 @@ export function codeFor(status: number | undefined, body: string): ModelCallErro
   const said = body.toLowerCase();
   if (status === undefined) return 'network';
   if (status === 401) return 'bad_key';
+  // Google answers a bad key with 400 and API_KEY_INVALID.
+  if (said.includes('api_key_invalid') || said.includes('api key not valid')) return 'bad_key';
   if (status === 402 || said.includes('credit balance') || said.includes('insufficient_quota') || said.includes('billing')) return 'no_credit';
   if (status === 403) return 'bad_key'; // a key without permission for this use
   if (status === 404 || said.includes('model_not_found') || (status === 400 && said.includes('model:'))) return 'model';

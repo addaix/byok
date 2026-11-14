@@ -1,6 +1,7 @@
 /** Test helpers: a fake network, and byok's own store kept in memory. */
 import { createInMemoryProvider } from '@zodal/store';
-import { createByokStore, dataProviderSecretBackend, type SecretRecord, type ValuesRecord } from '../src';
+import { createByokStore, IN_THIS_BROWSER, type SecretRecord, type ValuesRecord } from '../src';
+import { dataProviderSecretBackend } from '../src/store';
 
 export interface Sent {
   url: string;
@@ -33,5 +34,6 @@ export function memoryStore() {
   const config = createInMemoryProvider<ValuesRecord>([]);
   const secretsProvider = createInMemoryProvider<SecretRecord>([]);
   const secrets = dataProviderSecretBackend(secretsProvider);
-  return { store: createByokStore({ config, secrets }), config, secretsProvider, secrets };
+  // Stands in for the browser's own store, so it says what that store says.
+  return { store: createByokStore({ config, secrets, where: IN_THIS_BROWSER }), config, secretsProvider, secrets };
 }

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { byokDefaults, byokSchema, CATALOG, createByokStore, fromSection, keyField, modelChoice, OPENAI, serviceInfo } from '../src';
+import { adoptKeys, ANTHROPIC, byokDefaults, byokSchema, CATALOG, createByokStore, fromSection, keyField, modelChoice, OPENAI, serviceInfo } from '../src';
 import { memoryStore } from './helpers';
 
 const KEY = 'sk-ant-api03-SECRETSECRETSECRET-1234';
@@ -100,7 +100,7 @@ describe('createByokStore', () => {
     failing.upsert = async () => {
       throw new Error(`disk full while writing ${KEY}`);
     };
-    const { dataProviderSecretBackend } = await import('../src');
+    const { dataProviderSecretBackend } = await import('../src/store');
     const backend = dataProviderSecretBackend(failing);
     const error = await backend.set('keys.anthropic', KEY).catch((e: Error) => e);
     expect(String(error)).toMatch(/write `keys.anthropic` failed/);
@@ -109,13 +109,59 @@ describe('createByokStore', () => {
 });
 
 describe('fromSection (a host mounted byok under a prefix)', () => {
-  it("reads the plain values from the host's section and the key from the host's backend under the prefix", async () => {
+  it("reads the plain values from the host's effective values and the key from the host's backend under the prefix", async () => {
     const { secrets } = memoryStore();
     await secrets.set('ai.keys.openai', 'sk-proj-SECRET');
-    const settings = fromSection({ read: () => ({ 'text.service': 'openai', 'text.model': 'gpt-5.4-mini' }), secrets, prefix: 'ai' });
-    expect(await settings.values()).toEqual({ 'text.service': 'openai', 'text.model': 'gpt-5.4-mini' });
-    expect(await settings.revealKey('openai')).toBe('sk-proj-SECRET');
-    expect(await settings.revealKey('anthropic')).toBe('');
-    expect(() => fromSection({ read: () => ({}), secrets, prefix: '' })).toThrow(/prefix/);
+    const effective = () => ({ theme: 'dark', 'ai.text.service': 'openai', 'ai.text.model': 'gpt-5.4-mini', 'ai.keys.openai': { _tag: 'SecretRef' } });
+    for (const prefix of ['ai', 'ai.', ' ai ']) {
+      const settings = fromSection({ effective, secrets, prefix });
+      expect(await settings.values()).toEqual({ 'text.service': 'openai', 'text.model': 'gpt-5.4-mini' });
+      expect(await settings.revealKey('openai')).toBe('sk-proj-SECRET');
+      expect(await settings.revealKey('anthropic')).toBe('');
+    }
+    expect(() => fromSection({ effective, secrets, prefix: '.' })).toThrow(/prefix/);
+  });
+});
+
+describe('namespace, custom models and moving keys', () => {
+  it('keeps apps apart when they pass their own namespace', async () => {
+    const storage = new Map<string, string>();
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => void storage.set(k, v),
+      removeItem: (k: string) => void storage.delete(k),
+    };
+    try {
+      const a = createByokStore({ namespace: 'app-a' });
+      const shared = createByokStore();
+      await a.setKey('anthropic', KEY);
+      expect(await shared.revealKey('anthropic')).toBe('');
+      expect([...storage.keys()].sort()).toEqual(['app-a:secrets']);
+      expect(a.where).toMatch(/Kept in this browser/);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+  });
+
+  it("sends a custom model id only for a service that takes them, never another service's id", () => {
+    const catalog = { anthropic: ANTHROPIC, openai: { ...OPENAI, customModels: true } };
+    expect(modelChoice('openai', 'gpt-5.6-terra', catalog)).toMatchObject({ id: 'gpt-5.6-terra', price: null });
+    expect(modelChoice('openai', 'claude-opus-5-5', catalog).id).toBe('gpt-5.5');
+    expect(modelChoice('anthropic', 'claude-typo', catalog).id).toBe('claude-opus-5-5');
+  });
+
+  it('a store carries its catalog, so a call reads the same list the page showed', () => {
+    const catalog = { openai: OPENAI };
+    expect(createByokStore({ catalog, config: memoryStore().config, secrets: memoryStore().secrets }).catalog).toBe(catalog);
+  });
+
+  it('adopts keys from older storage without overwriting a key already set', async () => {
+    const { store } = memoryStore();
+    await store.setKey('openai', 'sk-NEW-SECRET');
+    const old: Record<string, string> = { anthropic: KEY, openai: 'sk-OLD-SECRET' };
+    const adopted = await adoptKeys({ from: async (s) => old[s], into: store, services: ['anthropic', 'openai', 'google'] });
+    expect(adopted).toEqual(['anthropic']);
+    expect(await store.revealKey('anthropic')).toBe(KEY);
+    expect(await store.revealKey('openai')).toBe('sk-NEW-SECRET');
   });
 });

@@ -22,7 +22,7 @@ describe('estimate', () => {
 
   it('rounds for a person: words to the thousand, dollars to two significant figures', () => {
     expect(roundWords(91_600)).toBe('92,000');
-    expect([0.4812, 2.31, 13.4, 0.01234, 0].map(formatDollars)).toEqual(['$0.48', '$2.3', '$13', '$0.012', '$0']);
+    expect([0.4812, 2.31, 13.4, 0.01234, 0, 9.96, 0.0996].map(formatDollars)).toEqual(['$0.48', '$2.3', '$13', '$0.012', '$0', '$10', '$0.10']);
     expect(wordCount('  three  little words\n')).toBe(3);
   });
 });

@@ -38,6 +38,12 @@ export interface ServiceInfo {
   keyPlaceholder: string;
   /** A short curated list, most capable first. The first is the default. */
   models: readonly ModelChoice[];
+  /**
+   * Whether a model id not in `models` is sent as typed (default false: it falls back to the
+   * default, which is what stale saved data needs). An id listed under another service is never
+   * sent either way.
+   */
+  customModels?: boolean;
 }
 
 /** The services an app offers, in the order a page lists them. */
@@ -83,6 +89,14 @@ export class ModelCallError extends Error {
   ) {
     super(message);
   }
+}
+
+/**
+ * True for a `ModelCallError`, also across two copies of byok (a CommonJS and an ESM build of the
+ * same app): checks the name and the code rather than the class.
+ */
+export function isModelCallError(error: unknown): error is ModelCallError {
+  return error instanceof Error && error.name === 'ModelCallError' && typeof (error as { code?: unknown }).code === 'string';
 }
 
 /** The codes after which no later call with the same settings can succeed: a run stops at the first. */

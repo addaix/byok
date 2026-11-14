@@ -2,8 +2,8 @@
  * The services byok offers out of the box and the models each one lists: data only, no AI SDK, so
  * a settings page and an estimate load without it.
  *
- * Sources. Anthropic ids and prices: the fleet's `claude-api` skill model table (cached
- * 2026-11-03), ids written exactly as listed there. OpenAI and Google ids: the model lists the
+ * Sources. Anthropic ids and prices: Anthropic's published API model list and prices, as read on
+ * 2026-11-03. OpenAI and Google ids: the model lists the
  * installed `@ai-sdk/openai` and `@ai-sdk/google` declare. No stated source gives OpenAI's or
  * Google's prices, so those carry none and a page says "cost not estimated".
  *
@@ -13,7 +13,7 @@
  */
 import type { Catalog, ModelChoice, ServiceId, ServiceInfo } from './types';
 
-const ANTHROPIC_PRICE_SOURCE = 'claude-api skill model table, cached 2026-11-03';
+const ANTHROPIC_PRICE_SOURCE = "Anthropic's published API prices, read 2026-11-03";
 
 export const ANTHROPIC: ServiceInfo = {
   id: 'anthropic',
@@ -64,7 +64,11 @@ export const GOOGLE: ServiceInfo = {
   ],
 };
 
-/** The default catalog: every service byok can call, Anthropic first. */
+/**
+ * The default catalog: every service byok can call, Anthropic first. Each service's default model
+ * is its first, the most capable, which is also its most expensive (Opus for Anthropic): pass a
+ * catalog that lists a cheaper model first to change that.
+ */
 export const CATALOG: Catalog = { anthropic: ANTHROPIC, openai: OPENAI, google: GOOGLE };
 
 /** The ids a catalog offers, in its order. */
@@ -78,10 +82,16 @@ export function serviceInfo(service: ServiceId, catalog: Catalog = CATALOG): Ser
 }
 
 /**
- * The model a setting names, or the service's default (its first) when it names none or one that
- * is not in this service's list: a model id left over from another service is never sent.
+ * The model a setting names, or the service's default (its first) when it names none, one listed
+ * under another service (a model id left over from another service is never sent), or one not in
+ * this service's list when the service takes no custom ids. A custom id carries no price.
  */
 export function modelChoice(service: ServiceId, model: string, catalog: Catalog = CATALOG): ModelChoice {
-  const { models } = serviceInfo(service, catalog);
-  return models.find((m) => m.id === model) ?? models[0]!;
+  const info = serviceInfo(service, catalog);
+  const listed = info.models.find((m) => m.id === model);
+  if (listed) return listed;
+  const id = model.trim();
+  const elsewhere = Object.values(catalog).some((s) => s && s.id !== service && s.models.some((m) => m.id === id));
+  if (info.customModels && id && !elsewhere) return { id, label: id, note: '', price: null };
+  return info.models[0]!;
 }

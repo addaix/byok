@@ -94,9 +94,9 @@ async function choiceFrom(settings: ByokSettings): Promise<KeyedChoice> {
   return { service, model: values['text.model'], apiKey: await settings.revealKey(service) };
 }
 
-/** `resolveChoice` for what the settings say. */
+/** `resolveChoice` for what the settings say (their catalog unless `options.catalog` is given). */
 export async function resolveModel(settings: ByokSettings, options: CallOptionsIn = {}): Promise<ResolvedModel> {
-  return resolveChoice(await choiceFrom(settings), options);
+  return resolveChoice(await choiceFrom(settings), { catalog: settings.catalog, ...options });
 }
 
 export interface ModelCallOptions extends CallOptionsIn {
@@ -125,31 +125,44 @@ export function modelCall(choice: KeyedChoice, options: ModelCallOptions = {}): 
   const { catalog = CATALOG, fetch, maxRetries = 2, maxOutputTokens, providerOptions } = options;
   const { info, driver, apiKey, model } = prepare(choice, catalog);
   let languageModel: Promise<LanguageModel> | undefined;
-  const fail = (code: 'cut_off' | 'declined') => plainError(code, info, { model: model.id });
+  const load = () => {
+    // Built on first use, and built again after a failed load (a flaky chunk download) rather
+    // than failing every later call.
+    languageModel ??= driver.languageModel(apiKey, model.id, { fetch }).catch((error: unknown) => {
+      languageModel = undefined;
+      throw error;
+    });
+    return languageModel;
+  };
+  const fail = (code: 'cut_off' | 'declined' | 'failed') => plainError(code, info, { model: model.id });
   return async (prompt, { signal } = {}) => {
     try {
-      languageModel ??= driver.languageModel(apiKey, model.id, { fetch });
       const { text, finishReason } = await generateText({
-        model: await languageModel,
+        model: await load(),
         prompt,
         abortSignal: signal,
         maxRetries,
         maxOutputTokens: typeof maxOutputTokens === 'function' ? maxOutputTokens(prompt) : maxOutputTokens,
         providerOptions: mergeOptions(driver.callOptions, providerOptions),
       });
-      // A reply that hit the cap is half an answer, and a declined one is no answer: neither is
-      // handed back as a reply.
+      // Only a reply that finished is handed back. One that hit the cap is half an answer, a
+      // declined one is no answer, and the rest ('error', 'interrupted', 'other') are failures,
+      // however much text came with them.
       if (finishReason === 'length') throw fail('cut_off');
       if (finishReason === 'content-filter') throw fail('declined');
+      if (finishReason !== 'stop') throw fail('failed');
       return text;
     } catch (error) {
-      if (isAbort(error) || signal?.aborted) throw error;
+      if (isAbort(error)) throw error;
+      // Cancelled while a failure was arriving: still a cancel, and never the raw SDK error,
+      // which carries the service's response body (it can quote the key).
+      if (signal?.aborted) throw new DOMException('The call was cancelled.', 'AbortError');
       throw toModelCallError(error, info, { model: model.id });
     }
   };
 }
 
-/** The model function for what the settings say (reads them once, now). */
+/** The model function for what the settings say (reads them once, now; their catalog unless given). */
 export async function makeModelCall(settings: ByokSettings, options: ModelCallOptions = {}): Promise<ModelCall> {
-  return modelCall(await choiceFrom(settings), options);
+  return modelCall(await choiceFrom(settings), { catalog: settings.catalog, ...options });
 }
