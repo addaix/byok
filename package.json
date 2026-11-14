@@ -1,0 +1,131 @@
+{
+  "name": "byok",
+  "version": "0.1.0",
+  "description": "Bring your own AI keys: a Zod settings section for which AI service, which model and whose key, the call that turns it into a model function with errors a person can act on, a cost estimate, and a key field that never leaks the key.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thorwhalen/byok.git"
+  },
+  "homepage": "https://github.com/thorwhalen/byok#readme",
+  "keywords": [
+    "byok",
+    "bring-your-own-key",
+    "api-key",
+    "ai",
+    "llm",
+    "anthropic",
+    "openai",
+    "gemini",
+    "ai-sdk",
+    "settings",
+    "zod",
+    "zodal"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./call": {
+      "import": {
+        "types": "./dist/call.d.ts",
+        "default": "./dist/call.js"
+      },
+      "require": {
+        "types": "./dist/call.d.cts",
+        "default": "./dist/call.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "ci-local": "npm run lint && npm test && npm run build"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.105",
+    "@ai-sdk/google": "^4.0.121",
+    "@ai-sdk/openai": "^4.0.118",
+    "@zodal/store": "^0.2.0",
+    "@zodal/store-localstorage": "^0.2.0",
+    "ai": "^7.0.173"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0",
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "jsdom": "^25.0.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9",
+    "vitest": "^3.2.7",
+    "zod": "^4.6.7"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true
+  },
+  "wads": {
+    "ci": {
+      "subdir": ".",
+      "packageManager": "npm",
+      "nodeVersions": [
+        "20",
+        "22",
+        "24"
+      ],
+      "publishNode": "24",
+      "lintCommand": "npm run lint --if-present",
+      "testCommand": "npm test --if-present",
+      "buildCommand": "npm run build --if-present",
+      "publish": {
+        "enabled": true,
+        "marker": "[publish-npm]",
+        "registry": "https://registry.npmjs.org",
+        "provenance": true,
+        "trustedPublishing": true,
+        "access": "public"
+      }
+    }
+  }
+}
