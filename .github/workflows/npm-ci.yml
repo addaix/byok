@@ -1,0 +1,23 @@
+# wads NPM CI: calls the reusable workflow hosted in i2mint/wads.
+#
+# All configuration lives in package.json under the "wads" key (wads.ci.*).
+# Publishing to npm is OPT-IN: wads.ci.publish.enabled is true and the commit
+# message must contain the marker "[publish-npm]". Publishing uses npm trusted
+# publishing (OIDC); there is no NPM_TOKEN secret. On npmjs.com: package ->
+# Settings -> Trusted Publisher -> GitHub Actions, with this repo and THIS
+# file's name (npm-ci.yml), or run
+#   npm trust github byok --file npm-ci.yml --repo thorwhalen/byok --allow-publish -y
+# The package must exist on npm first: publish the very first version locally.
+# To do locally what CI does: `npm run ci-local`.
+name: NPM CI
+on:
+  push:
+  pull_request:
+jobs:
+  npm-ci:
+    uses: i2mint/wads/.github/workflows/npm-ci.yml@master
+    permissions:
+      contents: read
+      id-token: write # npm provenance / OIDC trusted publishing
+    with:
+      package-dir: .
