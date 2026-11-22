@@ -55,6 +55,13 @@ describe('createByokStore', () => {
     expect(view.keys.anthropic).toMatchObject({ isSet: false, masked: 'not set' });
   });
 
+  it('says whether a choice was ever saved', async () => {
+    const store = createByokStore({ config: memoryStore().config, secrets: memoryStore().secrets });
+    expect(await store.hasSavedChoice()).toBe(false);
+    await store.save({ 'text.service': 'openai' });
+    expect(await store.hasSavedChoice()).toBe(true);
+  });
+
   it('keeps a key in the secret backend only, and shows it masked', async () => {
     const { store, config, secretsProvider } = memoryStore();
     await store.save({ 'text.model': 'claude-sonnet-5-5' });

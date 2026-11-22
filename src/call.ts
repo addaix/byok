@@ -106,6 +106,12 @@ export interface ModelCallOptions extends CallOptionsIn {
   maxOutputTokens?: number | ((prompt: string) => number);
   /** Provider options merged over the driver's (`{ anthropic: { effort: 'low' } }`). */
   providerOptions?: CallOptions;
+  /**
+   * Called once per successful call with the real token usage the service reported (thinking
+   * tokens included in `outputTokens`), so a host can sum it and price it with `costOf`. A service
+   * that reports none counts as 0. Absent: nothing changes. Not called for a failed call.
+   */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }
 
 function mergeOptions(base: CallOptions | undefined, extra: CallOptions | undefined): CallOptions | undefined {
@@ -122,7 +128,7 @@ function mergeOptions(base: CallOptions | undefined, extra: CallOptions | undefi
  * too, except a cancel, which stays an AbortError.
  */
 export function modelCall(choice: KeyedChoice, options: ModelCallOptions = {}): ModelCall {
-  const { catalog = CATALOG, fetch, maxRetries = 2, maxOutputTokens, providerOptions } = options;
+  const { catalog = CATALOG, fetch, maxRetries = 2, maxOutputTokens, providerOptions, onUsage } = options;
   const { info, driver, apiKey, model } = prepare(choice, catalog);
   let languageModel: Promise<LanguageModel> | undefined;
   const load = () => {
@@ -137,7 +143,7 @@ export function modelCall(choice: KeyedChoice, options: ModelCallOptions = {}): 
   const fail = (code: 'cut_off' | 'declined' | 'failed') => plainError(code, info, { model: model.id });
   return async (prompt, { signal } = {}) => {
     try {
-      const { text, finishReason } = await generateText({
+      const { text, finishReason, usage } = await generateText({
         model: await load(),
         prompt,
         abortSignal: signal,
@@ -151,6 +157,7 @@ export function modelCall(choice: KeyedChoice, options: ModelCallOptions = {}): 
       if (finishReason === 'length') throw fail('cut_off');
       if (finishReason === 'content-filter') throw fail('declined');
       if (finishReason !== 'stop' || !text.trim()) throw fail('failed'); // an empty reply is no answer either
+      onUsage?.({ inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0 });
       return text;
     } catch (error) {
       if (isAbort(error)) throw error;

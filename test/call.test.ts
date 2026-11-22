@@ -24,6 +24,20 @@ async function failure(choice: KeyedChoice, respond: (sent: Sent) => { status: n
   throw new Error('the call did not fail');
 }
 
+describe('modelCall onUsage', () => {
+  it('reports the real usage once per successful call, and never for a failed one', async () => {
+    const seen: Array<{ inputTokens: number; outputTokens: number }> = [];
+    const ok = fakeTransport(() => ({ status: 200, body: anthropicReply('hi') }));
+    const call = modelCall(anthropicChoice, { fetch: ok.fetch, onUsage: (u) => seen.push(u) });
+    await call('a');
+    await call('b');
+    expect(seen).toEqual([{ inputTokens: 12, outputTokens: 3 }, { inputTokens: 12, outputTokens: 3 }]);
+    const cut = fakeTransport(() => ({ status: 200, body: anthropicReply('half', 'max_tokens') }));
+    await expect(modelCall(anthropicChoice, { fetch: cut.fetch, onUsage: (u) => seen.push(u) })('c')).rejects.toThrow(ModelCallError);
+    expect(seen).toHaveLength(2);
+  });
+});
+
 describe('modelCall', () => {
   it('sends the prompt to Anthropic only, with the key and the browser header, and returns the text', async () => {
     const { fetch, sent } = fakeTransport(() => ({ status: 200, body: anthropicReply('hello back') }));
