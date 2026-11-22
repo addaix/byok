@@ -47,6 +47,12 @@ export interface ByokStore extends ByokSettings {
    */
   readonly where: string | undefined;
   load(): Promise<ByokView>;
+  /**
+   * Whether `save` has ever written a choice here. A consumer migrating from its own older storage
+   * asks this so it never moves an older choice over a newer one, instead of reading byok's
+   * storage key itself.
+   */
+  hasSavedChoice(): Promise<boolean>;
   /** Change plain values (never a key: those go through `setKey`). Refuses a value the schema refuses. */
   save(patch: Partial<ByokPlainValues>): Promise<void>;
   /** Store a key (trimmed); an empty one forgets it. */
@@ -172,6 +178,9 @@ export function createByokStore({
       const refs: ByokView['keys'] = {};
       for (const service of servicesOf(catalog)) refs[service] = await keys.get(keyField(service));
       return { values: await values(), keys: refs };
+    },
+    async hasSavedChoice() {
+      return (await getOrUndefined(plain, VALUES_ID)) !== undefined;
     },
     async save(patch) {
       for (const [name, value] of Object.entries(patch)) {
