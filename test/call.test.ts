@@ -25,16 +25,21 @@ async function failure(choice: KeyedChoice, respond: (sent: Sent) => { status: n
 }
 
 describe('modelCall onUsage', () => {
-  it('reports the real usage once per successful call, and never for a failed one', async () => {
+  it('reports the real usage once per call the service answered, a refused reply included, and never when no answer came', async () => {
     const seen: Array<{ inputTokens: number; outputTokens: number }> = [];
     const ok = fakeTransport(() => ({ status: 200, body: anthropicReply('hi') }));
     const call = modelCall(anthropicChoice, { fetch: ok.fetch, onUsage: (u) => seen.push(u) });
     await call('a');
     await call('b');
     expect(seen).toEqual([{ inputTokens: 12, outputTokens: 3 }, { inputTokens: 12, outputTokens: 3 }]);
-    const cut = fakeTransport(() => ({ status: 200, body: anthropicReply('half', 'max_tokens') }));
-    await expect(modelCall(anthropicChoice, { fetch: cut.fetch, onUsage: (u) => seen.push(u) })('c')).rejects.toThrow(ModelCallError);
-    expect(seen).toHaveLength(2);
+    // cut off at the cap: refused here, but billed by the service, so counted
+    const cut = fakeTransport(() => ({ status: 200, body: { ...anthropicReply('half', 'max_tokens'), usage: { input_tokens: 26_000, output_tokens: 4_800 } } }));
+    await expect(modelCall(anthropicChoice, { fetch: cut.fetch, onUsage: (u) => seen.push(u) })('c')).rejects.toMatchObject({ code: 'cut_off' });
+    expect(seen.at(-1)).toEqual({ inputTokens: 26_000, outputTokens: 4_800 });
+    // no answer at all (a refused key): nothing billed, nothing reported
+    const refused = fakeTransport(() => ({ status: 401, body: { error: { type: 'authentication_error', message: 'invalid x-api-key' } } }));
+    await expect(modelCall(anthropicChoice, { fetch: refused.fetch, maxRetries: 0, onUsage: (u) => seen.push(u) })('d')).rejects.toThrow(ModelCallError);
+    expect(seen).toHaveLength(3);
   });
 });
 

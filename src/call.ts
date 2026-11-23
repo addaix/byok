@@ -107,9 +107,11 @@ export interface ModelCallOptions extends CallOptionsIn {
   /** Provider options merged over the driver's (`{ anthropic: { effort: 'low' } }`). */
   providerOptions?: CallOptions;
   /**
-   * Called once per successful call with the real token usage the service reported (thinking
-   * tokens included in `outputTokens`), so a host can sum it and price it with `costOf`. A service
-   * that reports none counts as 0. Absent: nothing changes. Not called for a failed call.
+   * Called once for every call the service answered, with the token usage it reported (thinking
+   * tokens included in `outputTokens`), so a host can sum it and price it with `costOf`. That
+   * includes a reply that is then refused here (cut off at the cap, declined, empty): the service
+   * billed it all the same. Not called when no answer came (a network failure, a refusal such as a
+   * bad key or a rate limit, a cancel). A service that reports none counts as 0. Absent: nothing changes.
    */
   onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }
@@ -151,13 +153,15 @@ export function modelCall(choice: KeyedChoice, options: ModelCallOptions = {}): 
         maxOutputTokens: typeof maxOutputTokens === 'function' ? maxOutputTokens(prompt) : maxOutputTokens,
         providerOptions: mergeOptions(driver.callOptions, providerOptions),
       });
+      // The service answered, so it billed the call, whatever the answer is worth: its usage is
+      // reported before the reply is judged.
+      onUsage?.({ inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0 });
       // Only a reply that finished is handed back. One that hit the cap is half an answer, a
       // declined one is no answer, and the rest ('error', 'interrupted', 'other') are failures,
       // however much text came with them.
       if (finishReason === 'length') throw fail('cut_off');
       if (finishReason === 'content-filter') throw fail('declined');
       if (finishReason !== 'stop' || !text.trim()) throw fail('failed'); // an empty reply is no answer either
-      onUsage?.({ inputTokens: usage?.inputTokens ?? 0, outputTokens: usage?.outputTokens ?? 0 });
       return text;
     } catch (error) {
       if (isAbort(error)) throw error;
